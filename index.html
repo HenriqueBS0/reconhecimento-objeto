@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisar Imagem</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gradient-to-r from-green-400 to-green-600 h-screen">
+
+    <div class="text-white">
+        <h1 class="text-4xl font-bold text-center py-4">Detector de Joaninha</h1>
+
+        <!-- Input de arquivo e botão "Analisar Imagem" -->
+        <div class="flex flex-col md:flex-row items-center justify-center p-4">
+            <input type="file" accept=".png, .jpg, .jpeg" name="arquivo" id="arquivoInput" onchange="exibirImagem()" class="mr-2 md:mr-4">
+            <button onclick="analisarImagem()"
+                class="mt-2 md:mt-0 bg-white text-green-500 py-2 px-4 rounded cursor-pointer">Analisar Imagem</button>
+        </div>
+
+        <!-- Canvas para exibir a imagem e desenhar retângulos -->
+        <canvas id="imagemCanvas" class="w-full md:w-3/4 mx-auto mt-4 border border-white"></canvas>
+
+
+    </div>
+
+    <div id="loading"
+        class="fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="animate-spin h-14 w-14 border-t-4 border-b-4 border-green-500 rounded-full"></div>
+    </div>
+
+    <div id="resultado"
+        class="fixed bottom-4 right-4 p-4 bg-white text-green-500 text-lg rounded-lg hidden flex items-center">
+        <i id="resultadoIcone" class="fas fa-check-circle text-green-500 mr-2"></i>
+        <span id="resultadoTexto"></span>
+    </div>
+
+    <script>
+        async function analisarImagem() {
+            const loading = document.getElementById('loading');
+            loading.classList.remove('hidden');
+
+            const arquivoInput = document.getElementById('arquivoInput');
+            const canvas = document.getElementById('imagemCanvas');
+            const ctx = canvas.getContext('2d');
+
+            if (!imagemCarregada(canvas)) {
+                console.log('Nenhuma imagem carregada.');
+                loading.classList.add('hidden');
+                return;
+            }
+
+            const formData = criarFormData(arquivoInput);
+
+            try {
+                const response = await enviarRequisicao('/catch-ladybugs', 'POST', formData);
+
+                if (!response.ok) {
+                    throw new Error('Erro ao processar a imagem.');
+                }
+
+                const retangulos = await response.json();
+                desenharRetangulos(retangulos);
+                exibirResultado(retangulos);
+            } catch (error) {
+                console.error(error.message);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function exibirResultado(retangulos) {
+            const resultado = document.getElementById('resultado');
+            const resultadoIcone = document.getElementById('resultadoIcone');
+            const resultadoTexto = document.getElementById('resultadoTexto');
+
+            if (retangulos.length === 0) {
+                resultadoIcone.className = 'fas fa-times-circle text-red-500 mr-2';
+                resultadoTexto.textContent = 'Nenhuma joaninha encontrada.';
+            } else {
+                resultadoIcone.className = 'fas fa-check-circle text-green-500 mr-2';
+                resultadoTexto.textContent = 'Joaninha encontrada!';
+            }
+
+            resultado.classList.remove('animate-bounce', 'hidden');
+            resultado.classList.add('animate-bounce');
+
+            setTimeout(() => {
+                resultado.classList.remove('animate-bounce');
+                resultado.classList.add('hidden');
+            }, 4000);
+        }
+
+
+        function exibirImagem() {
+            const arquivoInput = document.getElementById('arquivoInput');
+            const canvas = document.getElementById('imagemCanvas');
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (arquivoInput.files.length > 0) {
+                const file = arquivoInput.files[0];
+                const reader = new FileReader();
+
+                reader.readAsDataURL(file);
+
+                reader.onload = function () {
+                    const imagem = new Image();
+                    imagem.src = reader.result;
+
+                    imagem.onload = function () {
+                        carregarImagemNoCanvas(canvas, ctx, imagem);
+                    };
+                };
+            }
+        }
+
+        function desenharRetangulos(retangulos) {
+            const canvas = document.getElementById('imagemCanvas');
+            const ctx = canvas.getContext('2d');
+
+            retangulos.forEach(retangulo => {
+                const canvasX = retangulo.geometry.Left * canvas.width;
+                const canvasY = retangulo.geometry.Top * canvas.height;
+                const canvasWidth = retangulo.geometry.Width * canvas.width;
+                const canvasHeight = retangulo.geometry.Height * canvas.height;
+
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight);
+            });
+        }
+
+        function imagemCarregada(canvas) {
+            return canvas.width > 0 && canvas.height > 0;
+        }
+
+        function criarFormData(arquivoInput) {
+            const formData = new FormData();
+            formData.append('arquivo', arquivoInput.files[0]);
+            return formData;
+        }
+
+        async function enviarRequisicao(url, metodo, body) {
+            return await fetch(url, {
+                method: metodo,
+                body: body,
+            });
+        }
+
+        function carregarImagemNoCanvas(canvas, ctx, imagem) {
+            const larguraDesejada = window.innerWidth * 0.45;
+            const proporcao = larguraDesejada / imagem.width;
+            canvas.width = larguraDesejada;
+            canvas.height = imagem.height * proporcao;
+            ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
+        }
+    </script>
+
+</body>
+
+</html>
